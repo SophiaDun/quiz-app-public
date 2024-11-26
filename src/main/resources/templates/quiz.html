@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Quiz - ${difficulty.capitalize()}</title>
+    <meta name="_csrf" th:content="${_csrf.token}" />
+    <meta name="_csrf_header" th:content="${_csrf.headerName}" />
+
+    <!-- Bootstrap for styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(120deg, #719ab4, #76a062);
+        }
+
+        .quiz-container {
+            max-width: 700px;
+            margin: auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .question {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .options {
+            margin-top: 20px;
+        }
+
+        .timer {
+
+            font-weight: bold;
+        }
+
+        .btn {
+            width: 100%;
+            margin-bottom: 10px;
+            text-align: left;
+            font-size: 1rem;
+            background-color: #292929;
+            color: white;
+            border-radius: 8px;
+        }
+
+        .btn:hover {
+            background-color: #0b0b0b;
+            color: white;
+        }
+
+        .btn.selected {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .timer,
+        .score {
+            font-size: 1.2rem;
+            color: #555;
+            margin: 10px 0;
+        }
+
+        .btn-submit {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .btn-submit:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="quiz-container">
+
+        <div class="d-flex justify-content-between">
+            <div id="timer" class="timer">Time Left: 30s</div>
+            <div id="score" class="score">Current Score: <span id="currentScore">0</span></div>
+        </div>
+
+
+        <div class="question mt-4">Question will appear here</div>
+
+
+        <div class="score">Questions Answered: <span id="answeredCount">0</span>/10</div>
+
+
+        <div class="options"></div>
+
+
+        <li style="display:none;" id="correctAnswer"></li>
+
+
+        <div class="text-center mt-4">
+            <button class="btn-submit" onclick="submitQuiz()">Quit</button>
+        </div>
+    </div>
+
+    <script>
+        const csrfToken = document.querySelector('meta[name="_csrf"]').getAttribute('content');
+        const csrfHeader = document.querySelector('meta[name="_csrf_header"]').getAttribute('content');
+        let timer;
+        let timeLeft = 30;
+        let questionCount = 0;
+        let score = 0;
+
+
+        function startTimer() {
+            timer = setInterval(function () {
+                timeLeft--;
+                document.getElementById("timer").innerText = `Time Left: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    nextQuestion(); // Proceed to the next question when time is up
+                }
+            }, 1000);
+        }
+
+        // Check the selected answer
+        function checkAnswer(selectedAnswer) {
+            const correctAnswer = document.getElementById("correctAnswer").innerText;
+
+            const payload = {
+                selectedAnswer: selectedAnswer,
+                correctAnswer: correctAnswer
+            };
+
+            // Submit the answer to the server
+            fetch('/quiz/answer', {
+                method: 'POST',
+                headers: {
+                    [csrfHeader]: csrfToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(response => response.json())
+                .then(isCorrect => {
+                    if (isCorrect) {
+                        score++;
+                        document.getElementById("currentScore").innerText = score;
+                        alert("Correct!");
+                    } else {
+                        alert("Wrong!");
+                    }
+
+                    questionCount++;
+                    document.getElementById("answeredCount").innerText = questionCount;
+
+                    if (questionCount < 10) {
+                        nextQuestion();
+                    } else {
+                        submitQuiz();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to submit answer. Please try again later.');
+                });
+        }
+
+        // Fetch the next question
+        function nextQuestion() {
+            clearInterval(timer);
+            timeLeft = 30;
+            document.getElementById("timer").innerText = `Time Left: ${timeLeft}s`;
+            startTimer();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const difficulty = urlParams.get('difficulty') || 'easy';
+
+            fetch(`/quiz/next?difficulty=${difficulty}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch question: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data === null) {
+                        clearInterval(timer);
+                        submitQuiz();
+                        return;
+                    }
+                    document.querySelector(".question").innerText = data.question;
+                    document.getElementById("correctAnswer").innerText = data.correct_answer;
+
+                    const options = [data.correct_answer, ...data.incorrect_answers];
+                    const optionsDiv = document.querySelector(".options");
+                    optionsDiv.innerHTML = "";
+                    options.sort(() => Math.random() - 0.5);
+
+                    options.forEach(option => {
+                        const button = document.createElement('button');
+                        button.innerText = option;
+                        button.className = 'btn';
+                        button.onclick = () => {
+                            checkAnswer(option);
+                            button.classList.add('selected');
+                        };
+                        optionsDiv.appendChild(button);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching question:', error);
+                    alert('Failed to load the next question. Try again later.');
+                });
+        }
+
+        // Submit the quiz results after 10 questions
+        function submitQuiz() {
+            const currentScore = document.getElementById("currentScore").innerText;
+
+            fetch('/quiz/submit', {
+                method: 'POST'
+            })
+                .then(response => response.json())
+                .then(finalScore => {
+                    alert(`Quiz finished! Your final score is: ${currentScore}`);
+                    window.location.href = "/home";
+                })
+                .catch(error => {
+                    console.error('Error submitting quiz:', error);
+                    alert('Failed to submit quiz. Try again later.');
+                });
+        }
+
+        // Initialize quiz when the page loads
+        window.onload = function () {
+            startTimer();
+            nextQuestion();
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+</body>
+
+</html>
