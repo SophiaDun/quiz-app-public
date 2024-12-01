@@ -42,9 +42,9 @@
    git clone https://github.com/your-username/quiz-app.git
    cd quiz-app
 2. Set environment variables for the database connection:
-    export SPRING_DATASOURCE_URL=<your-database-url>
-    export SPRING_DATASOURCE_USERNAME=<your-username>
-    export SPRING_DATASOURCE_PASSWORD=<your-password>
+    - export SPRING_DATASOURCE_URL=<your-database-url>
+    - export SPRING_DATASOURCE_USERNAME=<your-username>
+    - export SPRING_DATASOURCE_PASSWORD=<your-password>
     
 3.Run the application:
  ```bash
